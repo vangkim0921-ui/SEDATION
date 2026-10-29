@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ICU 진정">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#0B6A77">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+<title>ICU 진정·진통 선택기</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: 좌측 단계별 입력 패널 + 우측 sticky 처방 패널 (모바일은 세로 스택) */
+:root{
+  --bg:#EBF0F1; --surface:#FFFFFF; --surface-2:#F4F7F8; --line:#D2DBDE; --ink:#12212A; --muted:#586A74;
+  --accent:#0B6A77; --accent-ink:#FFFFFF; --accent-soft:#DAECEE;
+  --warn:#94550F; --warn-soft:#FBEDD9; --bad:#A1261E; --bad-soft:#F7E0DD; --ok:#1F6B45; --ok-soft:#DBEFE3;
+  --sans:"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0B1215; --surface:#131D22; --surface-2:#18252B; --line:#283942; --ink:#E1EAED; --muted:#91A4AD;
+  --accent:#4DBFCB; --accent-ink:#05252A; --accent-soft:#15383E;
+  --warn:#E5A55B; --warn-soft:#382915; --bad:#EF8A80; --bad-soft:#3B1D1A; --ok:#6BCA97; --ok-soft:#153226; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0B1215; --surface:#131D22; --surface-2:#18252B; --line:#283942; --ink:#E1EAED; --muted:#91A4AD;
+  --accent:#4DBFCB; --accent-ink:#05252A; --accent-soft:#15383E;
+  --warn:#E5A55B; --warn-soft:#382915; --bad:#EF8A80; --bad-soft:#3B1D1A; --ok:#6BCA97; --ok-soft:#153226; color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.55;margin:0}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.org{display:flex;align-items:center;gap:10px;padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+.org-mark{width:28px;height:28px;border-radius:6px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font:600 13px var(--sans);flex:none}
+.org-text{display:flex;flex-direction:column;line-height:1.25}
+.org-text b{font-size:14px;font-weight:600}
+.org-text span{font-size:11.5px;color:var(--muted);letter-spacing:.02em}
+header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 24px;margin-bottom:18px}
+h1{font-size:24px;font-weight:700;letter-spacing:-0.01em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:2px 0 0;font-size:13px;max-width:70ch}
+.legend{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.04em}
+
+.grid{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}
+@media (min-width:980px){.grid{grid-template-columns:minmax(0,430px) minmax(0,1fr)}
+  .out{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px);max-height:calc(100vh - 32px);overflow:auto}}
+
+.inputs{display:flex;flex-direction:column;gap:12px}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px 16px;display:flex;flex-direction:column;gap:12px}
+.step h2{margin:0;font-size:14px;font-weight:600;display:flex;align-items:center;gap:10px}
+.num{font-family:var(--mono);font-size:11px;font-weight:500;width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;background:var(--ink);color:var(--surface);flex:none}
+.field{display:flex;flex-direction:column;gap:6px}
+.flabel{font-size:12px;color:var(--muted);font-weight:500;letter-spacing:.02em}
+.hint{font-size:12px;color:var(--muted);margin:0}
+
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg input,.chips input{position:absolute;opacity:0;pointer-events:none}
+.seg label{flex:1 1 0;min-width:92px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer;background:var(--surface-2);display:flex;flex-direction:column;gap:1px;transition:border-color .12s,background .12s}
+.seg label b{font-weight:600;font-size:13px}
+.seg label small{font-size:11px;color:var(--muted);line-height:1.35}
+.seg label:hover{border-color:var(--muted)}
+.seg input:checked + label{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.seg input:focus-visible + label,.chips input:focus-visible + label{outline:2px solid var(--accent);outline-offset:2px}
+
+.nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.nums label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.nums input,.nums select{font:500 15px var(--mono);color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%;min-width:0}
+.nums input:focus,.nums select:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
+.wt{font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.wt b{color:var(--ink);font-weight:500}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips label{border:1px solid var(--line);border-radius:999px;padding:5px 11px;cursor:pointer;font-size:12.5px;background:var(--surface-2);user-select:none}
+.chips label:hover{border-color:var(--muted)}
+.chips input:checked + label{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+
+/* output */
+.out{display:flex;flex-direction:column;gap:12px}
+.rx{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.rx-head{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-bottom:1px solid var(--line)}
+.rx-head > div{padding:14px 18px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.rx-head > div + div{border-left:1px solid var(--line)}
+.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.drugname{font-size:21px;font-weight:700;letter-spacing:-0.01em;line-height:1.25;overflow-wrap:anywhere}
+.target{display:flex;flex-wrap:wrap;gap:6px;padding:10px 18px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.pill{font-family:var(--mono);font-size:11.5px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);background:var(--surface);white-space:nowrap}
+.pill.acc{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+.block{padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.block + .block{border-top:1px solid var(--line)}
+.block h3{margin:0;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.drug{display:flex;flex-direction:column;gap:8px;min-width:0}
+.drug-top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px}
+.drug-top h4{margin:0;font-size:17px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rank{font-family:var(--mono);font-size:10.5px;font-weight:500;letter-spacing:.06em;padding:2px 7px;border-radius:4px;background:var(--accent);color:var(--accent-ink)}
+.rank.two{background:transparent;color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.when{font-size:12.5px;background:var(--accent-soft);border-radius:6px;padding:5px 9px}
+.when b{font-weight:600}
+.conc{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.conc input{width:64px;font:500 13px var(--mono);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:3px 6px;text-align:right}
+.conc input:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+.why{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:3px}
+.why li{font-size:13px;padding-left:14px;position:relative}
+.why li::before{content:"";position:absolute;left:2px;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.tablewrap{overflow-x:auto}
+table.dose{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:13px;min-width:420px}
+table.dose th,table.dose td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+table.dose thead th{font-size:10.5px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500}
+table.dose tbody th{font-weight:500;color:var(--muted);white-space:nowrap;width:64px}
+table.dose td{font-family:var(--mono)}
+table.dose td span{color:var(--muted);font-size:11px}
+table.dose tr.ml td:last-child{color:var(--accent);font-weight:500}
+table.dose td.txt{font-family:var(--sans)}
+.notes{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
+.notes li{font-size:12.5px;background:var(--warn-soft);color:var(--ink);border-radius:6px;padding:5px 9px}
+.notes li b{color:var(--warn)}
+.alts{display:flex;flex-direction:column;gap:10px}
+.altcard{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.altcard .notes li{background:var(--surface);border:1px solid var(--line)}
+.altcard table.dose th,.altcard table.dose td{border-color:var(--line)}
+.adj{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.adj li{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.adj .ah{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.adj .ah b{font-weight:600;font-size:14px}
+.adj .ah .mech{font-size:11.5px;color:var(--muted)}
+.adj .d{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+.adj .r{font-size:12.5px}
+.adj .c{font-size:12px;color:var(--warn)}
+.avoid{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px}
+.avoid li{font-size:12.5px;background:var(--bad-soft);border-radius:8px;padding:7px 10px}
+.avoid li b{color:var(--bad);font-weight:600;margin-right:4px}
+.mon{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:5px}
+.mon li{font-size:13px;display:grid;grid-template-columns:92px minmax(0,1fr);gap:10px}
+.mon li span:first-child{font-family:var(--mono);font-size:11px;color:var(--ok);background:var(--ok-soft);border-radius:4px;padding:2px 6px;align-self:start;text-align:center}
+footer{margin-top:24px;padding-top:14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+footer p{margin:0;max-width:95ch}
+footer b{color:var(--ink);font-weight:600}
+@media (max-width:520px){.rx-head{grid-template-columns:1fr}.rx-head > div + div{border-left:0;border-top:1px solid var(--line)}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="org">
+    <div class="org-mark" aria-hidden="true">호</div>
+    <div class="org-text"><b>인제대학교 일산백병원 호흡기내과</b><span>Division of Pulmonology &amp; Critical Care · Inje University Ilsan Paik Hospital</span></div>
+  </div>
+  <header>
+    <div>
+      <h1>ICU 진정·진통 선택기</h1>
+      <p class="sub">환자 상태를 고르면 1차·2차 진통제와 진정제, 시작 용량, 주입 속도(mL/h)를 바로 계산해. PADIS 2018/2025, KSCCM 2021, 최신 RCT를 반영했어.</p>
+    </div>
+    <div class="legend">ANALGESIA-FIRST → LIGHT SEDATION</div>
+  </header>
+
+  <main class="grid">
+    <section class="inputs" id="inputs" aria-label="환자 상태 입력"></section>
+    <section class="out" id="out" aria-live="polite"></section>
+  </main>
+
+  <footer>
+    <p><b>제작</b> 인제대학교 일산백병원 호흡기내과</p>
+    <p><b>근거</b> Devlin JW, Crit Care Med 2018 (PADIS) · Lewis K, Crit Care Med 2025 (PADIS focused update) · Seo Y, Acute Crit Care 2022 (KSCCM) · MENDS (JAMA 2007) · SEDCOM (JAMA 2009) · MIDEX/PRODEX (JAMA 2012) · SPICE III (NEJM 2019) · MENDS2 (NEJM 2021) · A2B (JAMA 2025) · Van Gelder, Br J Clin Pharmacol 2024 · Huespe, Chest 2024 · DEMEL (Intensive Care Med 2025) · Pandey, Anesth Analg 2005</p>
+    <p>교육·참고용 계산기야. 용량은 시작점일 뿐이고, 최종 처방은 기관 프로토콜과 환자 반응을 보고 적정해.</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+const STORE = 'sedalgo-conc-v1';
+const DRUGS = {
+  propofol:     {name:'Propofol',       unit:'μg/kg/min', mass:'mg', conc:10,  cu:'mg/mL', perH:(x,W)=>x*W*60/1000},
+  dex:          {name:'Dexmedetomidine',unit:'μg/kg/h',   mass:'μg', conc:4,   cu:'μg/mL', perH:(x,W)=>x*W},
+  midazolam:    {name:'Midazolam',      unit:'mg/kg/h',   mass:'mg', conc:1,   cu:'mg/mL', perH:(x,W)=>x*W},
+  fentanyl:     {name:'Fentanyl',       unit:'μg/kg/h',   mass:'μg', conc:10,  cu:'μg/mL', perH:(x,W)=>x*W},
+  remifentanil: {name:'Remifentanil',   unit:'μg/kg/min', mass:'μg', conc:20,  cu:'μg/mL', perH:(x,W)=>x*W*60},
+  hydromorphone:{name:'Hydromorphone',  unit:'mg/h',      mass:'mg', conc:0.2, cu:'mg/mL', perH:(x)=>x},
+  ketamine:     {name:'Ketamine',       unit:'mg/kg/h',   mass:'mg', conc:2,   cu:'mg/mL', perH:(x,W)=>x*W},
+};
+let conc = {};
+try { conc = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch(e) { conc = {}; }
+const getConc = k => (conc[k] > 0 ? conc[k] : DRUGS[k].conc);
+
+const GROUPS = [
+  {step:'진정 목표 · 기간', fields:[
+    {id:'target', label:'진정 목표', def:'light', opts:[['light','Light','RASS 0 ~ −2'],['deep','Deep','RASS −3 ~ −5']],
+     hint:'Deep 적응증: 중증 ARDS의 dyssynchrony, 근이완제, ICP 조절, 경련중첩'},
+    {id:'duration', label:'예상 인공호흡 기간', def:'long', opts:[['short','72시간 미만','수술 후 · 단기 MV'],['long','72시간 이상','ARDS · 패혈증 등']]},
+  ]},
+  {step:'혈역학', fields:[
+    {id:'hemo', label:'승압제', def:'stable', opts:[['stable','없음','혈역학 안정'],['low','저용량','NE ≤ 0.1 μg/kg/min'],['high','고용량','NE > 0.1 또는 2제 이상']]},
+    {id:'hr', label:'심박 · 전도', def:'ok', opts:[['ok','정상',''],['brady','서맥 / AV block','HR < 50 · 2–3도 AVB']]},
+  ]},
+  {step:'장기 기능', fields:[
+    {id:'renal', label:'신기능', def:'normal', opts:[['normal','정상',''],['impaired','CrCl < 30','AKI · CKD'],['crrt','CRRT','']]},
+    {id:'hepatic', label:'간기능', def:'normal', opts:[['normal','정상',''],['severe','중증 저하','Child-Pugh C · ALF']]},
+  ]},
+  {step:'통증', fields:[
+    {id:'pain', label:'통증 평가', def:'modsev', opts:[['none','없음','CPOT 0 · BPS 3'],['mild','경도','NRS 1–3 · CPOT ≤ 2'],['modsev','중등도 이상','NRS ≥ 4 · CPOT > 2 · BPS > 5']]},
+  ]},
+];
+const FLAGS = [
+  ['delirium','섬망 (CAM-ICU 양성)'],
+  ['extub','발관 임박 · NIV'],
+  ['elderly','65세 초과'],
+  ['neuro','잦은 신경학적 평가'],
+  ['nmb','근이완제 사용 중'],
+  ['seizure','경련중첩증'],
+  ['withdrawal','알코올 · BZD 금단 위험'],
+  ['opioidTol','만성 opioid 사용'],
+  ['bronchospasm','기관지경련'],
+  ['neuropathic','신경병증성 통증 (GBS 등)'],
+  ['tg','고TG · 췌장염'],
+  ['bleeding','출혈 · 혈소판감소'],
+];
+
+/* ---------- build inputs ---------- */
+const inputs = document.getElementById('inputs');
+let html = `<div class="step"><h2><span class="num">1</span>체격 · 투약 체중</h2>
+  <div class="nums">
+    <label for="sex">성별<select id="sex"><option value="M">남</option><option value="F">여</option></select></label>
+    <label for="height">키 (cm)<input id="height" type="number" inputmode="decimal" min="120" max="220" value="170"></label>
+    <label for="weight">체중 (kg)<input id="weight" type="number" inputmode="decimal" min="25" max="250" value="70"></label>
+  </div>
+  <div class="wt" id="wt"></div></div>`;
+GROUPS.forEach((g,gi)=>{
+  html += `<div class="step"><h2><span class="num">${gi+2}</span>${g.step}</h2>`;
+  g.fields.forEach(f=>{
+    html += `<div class="field" role="radiogroup" aria-label="${f.label}"><span class="flabel">${f.label}</span><div class="seg">`;
+    f.opts.forEach(([v,b,s])=>{
+      const id = `${f.id}-${v}`;
+      html += `<input type="radio" name="${f.id}" id="${id}" value="${v}" ${v===f.def?'checked':''}><label for="${id}"><b>${b}</b>${s?`<small>${s}</small>`:''}</label>`;
+    });
+    html += `</div>${f.hint?`<p class="hint">${f.hint}</p>`:''}</div>`;
+  });
+  html += `</div>`;
+});
+html += `<div class="step"><h2><span class="num">${GROUPS.length+2}</span>특수 상황 <span class="hint" style="font-weight:400">· 해당하는 것 모두</span></h2><div class="chips">`;
+FLAGS.forEach(([k,l])=>{ html += `<input type="checkbox" id="flag-${k}" value="${k}"><label for="flag-${k}">${l}</label>`; });
+html += `</div></div>`;
+inputs.innerHTML = html;
+
+/* ---------- helpers ---------- */
+function fmt(n){
+  if(!isFinite(n)) return '–';
+  const a = Math.abs(n);
+  const d = a >= 100 ? 0 : a >= 1 ? 1 : a >= 0.1 ? 2 : 3;
+  return Number(n.toFixed(d)).toLocaleString('ko-KR',{maximumFractionDigits:d});
+}
+function readState(){
+  const s = {flags:{}};
+  s.sex = document.getElementById('sex').value;
+  s.height = parseFloat(document.getElementById('height').value) || 170;
+  s.weight = parseFloat(document.getElementById('weight').value) || 70;
+  GROUPS.forEach(g=>g.fields.forEach(f=>{ const el = inputs.querySelector(`input[name="${f.id}"]:checked`); s[f.id] = el ? el.value : f.def; }));
+  FLAGS.forEach(([k])=>{ s.flags[k] = document.getElementById('flag-'+k).checked; });
+  return s;
+}
+function weights(s){
+  const base = s.sex === 'M' ? 50 : 45.5;
+  const ibw = Math.max(30, base + 0.91*(s.height - 152.4));
+  const tbw = s.weight;
+  let W, how;
+  if (tbw <= ibw) { W = tbw; how = '실체중 (IBW 이하)'; }
+  else if (tbw > 1.2*ibw) { W = ibw + 0.4*(tbw - ibw); how = '보정체중 (실체중 > IBW × 1.2)'; }
+  else { W = tbw; how = '실체중'; }
+  return {ibw, tbw, W, how, bmi: tbw/Math.pow(s.height/100,2)};
+}
+
+/* ---------- decision logic ---------- */
+function plan(s, W){
+  const f = s.flags;
+  const highP = s.hemo === 'high', lowP = s.hemo === 'low';
+  const renalBad = s.renal !== 'normal', hepBad = s.hepatic === 'severe';
+  const brady = s.hr === 'brady';
+  const r = {analg:null, analgAlt:[], sed:null, sedAlt:[], adj:[], avoid:[], mon:[]};
+
+  /* ===== reusable drug recipes ===== */
+  const fentBolus = `${fmt(0.35*W)}–${fmt(0.5*W)} μg IV q30–60분 PRN (0.35–0.5 μg/kg)`;
+  const fentanylRec = (start, when, extraWhy=[]) => ({key:'fentanyl', start, min:Math.min(start,0.7), max:10, bolus:fentBolus, when,
+    why:[...extraWhy, '등가: fentanyl 100 μg ≈ morphine 10 mg · onset 1–2분, 반감기 2–4h', 'Histamine 유리 거의 없어 혈역학 영향 적음'],
+    notes:['2시간 넘게 주입하면 CSHT 급증(10h에 300분 이상) — 장기 주입 후 각성 지연은 <b>축적</b>부터 의심',
+           ...((renalBad||hepBad) ? ['간·신부전에서 축적 — 저용량 시작, 매일 감량 시도'] : [])]});
+  const remiRec = (when, extraWhy=[]) => ({key:'remifentanil', start:0.05, min:0.01, max:0.25, when,
+    bolus:'Bolus 금지 — 흉벽강직 · 서맥 · 무호흡 (슬라이드 loading 1.5 μg/kg은 ICU에선 대개 생략)',
+    why:[...extraWhy, '혈중·조직 esterase 대사 — 간·신기능 무관', 'CSHT 약 4분, 주입 시간과 무관'],
+    notes:['<b>중단 30–60분 전</b> 대체 진통제(acetaminophen, fentanyl bolus·주입, 저용량 ketamine) 깔아두기 — 반동통증·OIH 예방',
+           '3일 넘으면 급성 tolerance로 용량 상승 — fentanyl 전환 고려',
+           'Propofol과 병용 시 저혈압·서맥 상승작용 — 0.05 μg/kg/min에서 5–10분 간격으로 0.025씩 적정']});
+  const hydroRec = (when) => ({key:'hydromorphone', start:0.5, min:0.5, max:3, when,
+    bolus:'0.2–0.6 mg IV q1–2h PRN',
+    why:['등가: 1.5 mg ≈ morphine 10 mg · onset 5–15분, 반감기 2–3h', 'Fentanyl보다 지용성 낮아 지방조직 축적이 적음'],
+    notes:['Fentanyl에서 전환 시 교차내성 불완전 — 계산된 등가용량의 50–75%로 시작',
+           ...(renalBad ? ['신부전: 대사산물 H3G 축적 — 근간대·신경흥분 관찰'] : []),
+           '간·신부전 모두에서 축적 (슬라이드 표)']});
+  const propNotes = (deep)=>{
+    const n = [`<b>PRIS 임계</b> 4 mg/kg/h(66.7 μg/kg/min) × 48h 이상 = ${fmt(4*W)} mg/h · ${fmt(4*W/getConc('propofol'))} mL/h — 넘기면 TG·CK·lactate 확인`,
+               '지질 1.1 kcal/mL — 영양 열량에 포함'];
+    if (lowP) n.unshift('승압제 사용 중 — 5 μg/kg/min부터, 5분 간격 소량 적정');
+    if (deep || s.duration==='long') n.push('수일 사용 시 반감기 ~50h까지 연장 — 끄면 바로 깬다는 전제 깨짐');
+    return n;
+  };
+  const midNotes = ()=>{
+    const n = ['섬망 위험 ↑ (Van Gelder 2024: propofol 대비 adjusted HR 1.32)'];
+    if (renalBad) n.push('신부전 — 활성대사산물(α-OH-midazolam glucuronide) 축적 → 간헐 bolus 선호');
+    if (hepBad) n.push('중증 간부전 — CYP3A4 대사 저하, 작용 연장');
+    n.push('수 시간 주입 시 CSHT ~70–90분, ICU 장기 주입에선 훨씬 길어짐');
+    return n;
+  };
+  const dexNotes = ()=>{
+    const n = ['부하용량 생략 — 서맥·저혈압', 'Deep 진정 불가 — RASS −3 이하 필요해지면 전환', '0.2 μg/kg/h씩 30분 간격 증량'];
+    if (lowP) n.unshift('승압제 사용 중 — 0.2 μg/kg/h부터, 혈압 보며 증량');
+    if (!f.elderly) n.push('SPICE III 사후분석: 65세 이하에서 사망 증가 신호 — 젊은 패혈증 환자는 신중');
+    return n;
+  };
+  const propofolRec = (min,max,when,why,deep) => ({key:'propofol', start:5, min, max, when,
+    bolus: deep ? '저혈압 — 가능하면 생략, 필요 시 10–20 mg' : 'Light 목표에선 bolus 불필요',
+    why:[...why, 'Onset 1–2분 · 진통 효과 없음 — opioid 병용 필수'], notes:propNotes(deep)});
+  const dexRec = (when, why) => ({key:'dex', start:0.2, min:0.2, max:1.4, when, bolus:'부하용량 없음',
+    why:[...why, 'α2 작용 — 호흡억제 거의 없음, 약한 진통 효과', 'Onset 5–10분, 반감기 1.8–3.1h'], notes:dexNotes()});
+  const midRec = (start,min,max,when,why,bolus) => ({key:'midazolam', start, min, max, when, bolus: bolus || `${fmt(0.01*W)}–${fmt(0.05*W)} mg IV PRN (0.01–0.05 mg/kg)`,
+    why:[...why, 'Onset 2–5분 · 혈역학 부담이 가장 적은 진정제'], notes:midNotes()});
+  const ketRec = (when, why) => ({key:'ketamine', start:0.1, min:0.05, max:0.4, when,
+    bolus:`부하 ${fmt(0.1*W)}–${fmt(0.5*W)} mg IV (0.1–0.5 mg/kg)`,
+    why:[...why, 'NMDA 길항 — 진통 · 기관지 확장 · 중추 감작 억제', '교감 자극으로 혈역학 보존되는 편 — 단독 진정제로는 쓰지 않음'],
+    notes:['고용량에서 섬망·환각·고혈압·빈맥·타액 증가',
+           ...(highP ? ['카테콜아민 고갈 shock에선 직접 심근억제가 드러나 저혈압 가능'] : []),
+           '진정·환기 환자에서 ICP 상승은 임상적으로 무의미']});
+
+  /* ===== Analgesic ===== */
+  const remiOK = s.duration === 'short' && !highP && !f.opioidTol;
+  const remiReasons = [];
+  if (f.neuro) remiReasons.push('잦은 신경학적 평가 — 끄면 수 분 내 소실');
+  if (hepBad || renalBad) remiReasons.push('간·신부전 — 축적 없음');
+  if (f.extub) remiReasons.push('발관 타이밍 조절이 가장 쉬움');
+  if (remiOK && remiReasons.length){
+    r.analg = remiRec(null, ['72시간 이내 예상 MV', ...remiReasons]);
+    r.analgAlt.push(fentanylRec(0.7, '72시간 넘어가거나 remifentanil tolerance로 용량이 계속 오를 때', ['Remi → fentanyl 전환: remi 끄기 30–60분 전 fentanyl bolus 후 주입 시작']));
+  } else {
+    const start = f.opioidTol ? 1.5 : (renalBad || hepBad) ? 0.5 : 0.7;
+    const why = [];
+    if (s.pain === 'none') why.push('통증 없음 — ETT 불편감 조절 목적. PRN bolus 먼저, 반복 필요 시 지속주입');
+    else why.push('ICU 1차 opioid — 빠른 onset, 적정 쉬움');
+    if (s.hemo !== 'stable' || f.bronchospasm) why.push('Morphine보다 혈역학·기도에 유리');
+    if (f.opioidTol) why.push('만성 opioid 사용 — 시작 용량 상향 + ketamine 병용');
+    r.analg = fentanylRec(start, null, why);
+    if (remiOK) r.analgAlt.push(remiRec('단기 MV에서 각성·발관 조절이 중요해질 때 (SBT 직전 등)', ['72시간 이내 MV에서 가장 빠른 각성']));
+    if (s.duration === 'long' && !hepBad) r.analgAlt.push(hydroRec(f.opioidTol ? 'Fentanyl 용량이 계속 오를 때 — opioid rotation' : '장기 주입으로 fentanyl 축적·tolerance가 의심될 때'));
+  }
+  const morphineWhy = [];
+  if (renalBad) morphineWhy.push('신부전 — 활성대사산물 M6G 축적');
+  if (s.hemo !== 'stable') morphineWhy.push('histamine 유리 — 저혈압');
+  if (f.bronchospasm) morphineWhy.push('histamine — 기관지경련 악화');
+  if (morphineWhy.length) r.avoid.push(['Morphine', morphineWhy.join(' · ')]);
+
+  /* ===== Sedative ===== */
+  const propOK = !highP && !f.tg;
+  const dexOK = !brady && !highP;
+  const propWhyNot = highP ? '고용량 승압제 — 혈관확장·심근억제' : f.tg ? '고TG·췌장염 — 지질 부하' : '';
+  const dexWhyNot = brady ? '서맥·AV block' : highP ? '고용량 승압제 — 저혈압·서맥' : '';
+
+  if (f.seizure){
+    r.sed = midRec(0.1, 0.05, 2, null, ['경련중첩증 — BZD가 1차 지속주입제', '경련 목적 용량은 일반 진정(0.02–0.1 mg/kg/h)보다 훨씬 높음'],
+      `부하 0.2 mg/kg = ${fmt(0.2*W)} mg IV, 경련 지속 시 0.1–0.2 mg/kg 반복`);
+    r.sed.notes = [...r.sed.notes.slice(1), 'cEEG로 목표(경련 소실 또는 burst suppression) 확인'];
+    if (propOK) r.sedAlt.push({...propofolRec(20, 200, 'Midazolam 고용량에도 경련 지속 — 병용 또는 전환', ['불응성 경련중첩 — GABA-A 작용 + NMDA 억제'], true),
+      start:30, bolus:`부하 1–2 mg/kg = ${fmt(W)}–${fmt(2*W)} mg IV`,
+      notes:[`경련 목적 용량은 PRIS 임계(66.7 μg/kg/min)를 쉽게 넘음 — 48h 이내 감량 목표, TG·CK·lactate 매일`, ...(lowP?['승압제 사용 중 — 부하는 분할 투여']:[])]});
+    r.sedAlt.push({key:'ketamine', start:1, min:0.5, max:5, when:'Midazolam·propofol 불응 (초불응성 경련)',
+      bolus:`부하 1–3 mg/kg = ${fmt(W)}–${fmt(3*W)} mg IV`,
+      why:['NMDA 길항 — 지속 경련에서 GABA 수용체 내재화로 BZD 효과가 떨어질 때 보완', '혈역학 보존 — 승압제 사용 중에도 상대적으로 안전'],
+      notes:['cEEG 확인하며 적정', '고용량 장기 사용 시 심근억제·타액 증가']});
+  } else if (f.withdrawal){
+    r.sed = midRec(0.02, 0.02, 0.1, null, ['알코올·BZD 금단 — 교차내성 있는 BZD가 원인 치료', '증상 기반 간헐 bolus 우선, bolus가 잦으면 지속주입'],
+      `${fmt(0.02*W)}–${fmt(0.05*W)} mg IV PRN (증상 기반)`);
+    r.sed.notes = ['Dex 단독은 금단 경련·DT 예방 못 함 — 보조로만', 'Thiamine 먼저 (알코올)', ...r.sed.notes.slice(1)];
+    if (propOK) r.sedAlt.push(propofolRec(5, 50, 'BZD 고용량에도 조절 안 되는 금단 (BZD 불응성)', ['GABA-A 작용 + NMDA 억제 — BZD 불응성 금단에서 효과'], false));
+    if (dexOK && s.target === 'light') r.sedAlt.push(dexRec('빈맥·고혈압 등 교감항진 조절 보조 — 단독 금지', ['BZD 사용량 절감 보조']));
+  } else if (s.target === 'deep'){
+    if (propOK){
+      r.sed = propofolRec(5, 50, null, ['Deep 진정 — 빠른 적정·각성', 'Midazolam 대비 섬망 ↓ (Van Gelder 2024), CSHT 짧음'], true);
+      r.sedAlt.push(midRec((renalBad||hepBad)?0.02:0.03, 0.02, 0.1, 'Propofol 용량이 PRIS 임계에 가까워지거나 저혈압으로 증량이 막힐 때 — 병용으로 propofol 감량',
+        ['두 약 병용 시 각자 용량을 낮출 수 있음']));
+    } else {
+      r.sed = midRec((renalBad||hepBad)?0.02:0.03, 0.02, 0.1, null, [`Propofol 불가: ${propWhyNot}`, 'Deep 목표에서 혈역학 부담이 가장 적은 선택']);
+    }
+    r.sedAlt.push(ketRec('진정제 용량을 줄이고 싶을 때 — 특히 승압제 사용 중이거나 기관지경련 동반', ['Propofol·midazolam 절감 adjunct']));
+    r.avoid.push(['Dexmedetomidine', 'Deep 진정 목표 달성 불가']);
+  } else {
+    const preferDex = dexOK && (f.delirium || f.extub);
+    const base = 'Analgesia-first — opioid 적정 후에도 RASS 목표 미달일 때만 시작';
+    if (preferDex){
+      r.sed = dexRec(null, [base, f.delirium ? '섬망 동반 — PADIS 2025: 섬망 감소가 우선이면 Dex > propofol' : '발관 전후·NIV — 호흡억제 거의 없음', '쉽게 깨워 의사소통 가능']);
+      if (propOK) r.sedAlt.push(propofolRec(5, 30, 'Dex 1.4 μg/kg/h에도 RASS 목표 미달이거나 서맥으로 증량 불가', ['Propofol vs Dex: 사망·MV 기간 동등 (MENDS2, A2B)'], false));
+    } else if (propOK){
+      const why = [base, 'Propofol vs Dex: 사망·MV 기간 동등 (MENDS2) · 조기 Dex 전환 이득 없고 서맥·agitation ↑ (A2B 2025)'];
+      if (f.elderly && dexOK) why.push('65세 초과 — SPICE III 사후분석상 Dex 이득 신호, Dex도 합리적');
+      r.sed = propofolRec(5, 30, null, why, false);
+      if (dexOK) r.sedAlt.push(dexRec('섬망 발생, SBT·발관 준비 단계, 또는 propofol 장기 사용(PRIS 우려)', ['섬망 감소 (MENDS·SEDCOM, 단 BZD 대비 근거)', 'Propofol과 겹쳐 주입하다 propofol을 서서히 끄는 방식으로 전환']));
+    } else if (dexOK){
+      r.sed = dexRec(null, [base, `Propofol 불가: ${propWhyNot}`]);
+    } else {
+      r.sed = {key:null,
+        why:[base, `Propofol 불가: ${propWhyNot}`, `Dex 불가: ${dexWhyNot}`, 'Opioid 단독 analgosedation 유지, 필요 시 midazolam 간헐 bolus'],
+        bolus:`Midazolam ${fmt(0.01*W)}–${fmt(0.05*W)} mg IV PRN (0.01–0.05 mg/kg)`,
+        notes:midNotes()};
+      r.sedAlt.push(midRec((renalBad||hepBad)?0.02:0.02, 0.02, 0.1, 'Bolus가 시간당 2회 넘게 필요할 때 — 저용량 지속주입', ['혈역학 부담 최소']));
+      r.sedAlt.push(ketRec('Opioid·진정제 둘 다 줄이고 싶을 때', ['Opioid 절감 + 진정 보조']));
+    }
+  }
+  if (propWhyNot && !(r.sed && r.sed.key==='propofol')) r.avoid.push(['Propofol', propWhyNot]);
+  if (dexWhyNot && s.target==='light' && !f.seizure) r.avoid.push(['Dexmedetomidine', dexWhyNot]);
+  if (!f.seizure && !f.withdrawal && !(r.sed && r.sed.key==='midazolam') && !r.sedAlt.some(a=>a.key==='midazolam'))
+    r.avoid.push(['Midazolam 지속주입', 'Routine 진정 — 섬망 ↑, 축적 (MENDS · Van Gelder)']);
+  r.avoid.push(['Remimazolam', 'ICU 장기 진정 허가·근거 없음 — 시술 진정용']);
+  if (s.target==='deep') r.avoid.push(['Sevoflurane 흡입 진정', 'ARDS에서 90일 사망 ↑ (SESAR 2025: 52.9% vs 44.3%)']);
+
+  /* ===== Adjuncts ===== */
+  if (hepBad) r.adj.push({name:'Acetaminophen', mech:'중추 COX 억제', dose:'최대 2 g/day 또는 회피', reason:'중증 간기능저하 — 간독성', caution:''});
+  else r.adj.push({name:'Acetaminophen', mech:'중추 COX 억제 → PG 합성 ↓',
+    dose: W < 50 ? `15 mg/kg = ${fmt(15*W)} mg IV/PO q6h · max 60 mg/kg/day` : '650 mg q4h 또는 1 g q6h IV/PO · max 4 g/day',
+    reason:'Opioid 절감 1순위 — 신장·위장관 부담 최소',
+    caution: s.hemo !== 'stable' ? 'IV 제형 저혈압 — shock에선 경장 우선' : '영양불량·알코올 사용자는 2–3 g/day'});
+  const wantKet = f.opioidTol || f.bronchospasm;
+  if (wantKet && !r.sedAlt.some(a=>a.key==='ketamine'))
+    r.adj.push({name:'Ketamine (저용량)', mech:'NMDA 길항',
+      dose:`부하 ${fmt(0.1*W)}–${fmt(0.5*W)} mg → 0.05–0.4 mg/kg/h = ${fmt(0.05*W)}–${fmt(0.4*W)} mg/h · ${fmt(0.05*W/getConc('ketamine'))}–${fmt(0.4*W/getConc('ketamine'))} mL/h`,
+      reason:[f.opioidTol?'Opioid tolerance · OIH 억제':'', f.bronchospasm?'기관지 평활근 이완':''].filter(Boolean).join(' · '),
+      caution:'고용량 섬망·고혈압·빈맥' + (highP?' · 고용량 승압제면 저혈압 가능':'')});
+  if (f.neuropathic){
+    const g = s.renal==='normal' ? '100 mg tid 시작 → 1–3일마다 증량, 900–3,600 mg/day 분3' : s.renal==='impaired' ? 'CrCl 15–29: 200–700 mg/day 분1–2' : 'CRRT: 감량 시작, 진정 과다 보며 적정';
+    r.adj.push({name:'Gabapentin (경장)', mech:'α2δ-1 결합 → 흥분성 전달물질 ↓', dose:g,
+      reason:'신경병증성 통증 — GBS에서 통증·fentanyl ↓ (Pandey 2005). Pregabalin 75 mg bid도 대안',
+      caution:'공장 영양이면 흡수 ↓ · opioid와 병용 시 호흡억제 · 졸림·혼돈'});
+  }
+  const nsaidBad = [];
+  if (renalBad) nsaidBad.push('신기능 저하');
+  if (s.hemo !== 'stable') nsaidBad.push('shock — AKI');
+  if (f.bleeding) nsaidBad.push('출혈 · 혈소판 기능 저하');
+  if (hepBad) nsaidBad.push('중증 간부전');
+  if (nsaidBad.length) r.avoid.push(['NSAID', nsaidBad.join(' · ')]);
+  else if (s.pain !== 'none') r.adj.push({name:'Ketorolac', mech:'COX-1/2 억제',
+    dose: f.elderly ? '15 mg IV q6h · max 60 mg/day · ≤ 5일' : '30 mg IV 후 15–30 mg q6h · max 120 mg/day · ≤ 5일',
+    reason:'경–중등도 통증 보조. Ibuprofen 400–800 mg IV q6h(30분 이상)도 대안',
+    caution:'AKI · GI 출혈 · 혈소판 기능 저하 — Cr·Hb 감시'});
+  if (f.seizure) r.avoid.push(['Nefopam', '경련역치 저하']);
+  else if (s.pain !== 'none') r.adj.push({name:'Nefopam', mech:'5-HT · NE · DA 재흡수 억제',
+    dose:'20 mg slow IV (≥ 15분, 누운 자세) q4h PRN · max 120 mg/day', reason:'Multimodal 보조 — 국내에서 흔히 사용',
+    caution:'오심·발한·빈맥' + (f.elderly ? ' · 고령 심질환자 주의' : '') + ' · 녹내장 · MAOI 병용 금지'});
+  if (s.pain === 'modsev' && s.renal === 'normal' && !f.seizure) r.adj.push({name:'Magnesium sulfate', mech:'NMDA 차단 · Ca 채널 조절',
+    dose:`30–50 mg/kg = ${fmt(0.03*W)}–${fmt(0.05*W)} g IV`, reason:'중추 감작 억제 — opioid 절감 보조',
+    caution:'저혈압 · 근력 저하 · Mg 농도 확인 · 신부전·신경근질환 금기'});
+
+  /* ===== Monitoring ===== */
+  r.mon.push(['진정', s.target==='light' ? 'RASS 0 ~ −2, q4h · 매일 SAT(진정 중단) + SBT 연계' : 'RASS −3 ~ −5 · 매일 deep 필요성 재평가, 이유 해소되면 light로']);
+  r.mon.push(['통증', '자가보고 가능하면 NRS < 4, 불가하면 CPOT ≤ 2 / BPS ≤ 5 · 활력징후는 단서일 뿐']);
+  if (f.nmb) r.mon.push(['BIS', '40–60 목표 — 과진정·propofol 용량 ↓ (Huespe 2024), 결과지표 개선은 없음']);
+  if (f.seizure) r.mon.push(['cEEG', '경련 소실·burst suppression 확인']);
+  r.mon.push(['섬망', 'CAM-ICU 매 근무조 · 항정신병약 루틴 치료 근거 없음 (PADIS 2025)']);
+  if ((r.sed && r.sed.key==='propofol') || r.sedAlt.some(a=>a.key==='propofol')) r.mon.push(['PRIS', '48h 넘게 쓰면 TG · CK · lactate · ECG(RBBB, 서맥)']);
+  if ((r.sed && r.sed.key==='dex') || r.sedAlt.some(a=>a.key==='dex')) r.mon.push(['Dex', 'HR < 50 또는 MAP 하락 시 감량·중단']);
+  r.mon.push(['수면', 'Melatonin은 수면 목적 선택 — 섬망 예방 효과 없음 (DEMEL · Pro-MEDIC)']);
+  return r;
+}
+
+/* ---------- render ---------- */
+let uid = 0;
+function doseTable(rec, W){
+  const d = DRUGS[rec.key], c = getConc(rec.key);
+  const wb = d.unit.includes('/kg');
+  const h = x => d.perH(x,W);
+  const head = `<thead><tr><th></th><th>${wb ? '체중당' : '용량'}</th>${wb?'<th>시간당</th>':''}<th>속도 @ ${c} ${d.cu}</th></tr></thead>`;
+  const row = (lab, a, b) => {
+    const r1 = b == null ? fmt(a) : `${fmt(a)}–${fmt(b)}`;
+    const r2 = b == null ? fmt(h(a)) : `${fmt(h(a))}–${fmt(h(b))}`;
+    const r3 = b == null ? fmt(h(a)/c) : `${fmt(h(a)/c)}–${fmt(h(b)/c)}`;
+    return `<tr class="ml"><th>${lab}</th><td>${r1} <span>${d.unit}</span></td>${wb?`<td>${r2} <span>${d.mass}/h</span></td>`:''}<td>${r3} <span>mL/h</span></td></tr>`;
+  };
+  return `<div class="tablewrap"><table class="dose">${head}<tbody>${row('시작', rec.start)}${row('범위', rec.min, rec.max)}<tr><th>Bolus</th><td colspan="${wb?3:2}" class="txt">${rec.bolus}</td></tr></tbody></table></div>`;
+}
+function concInput(key){
+  const d = DRUGS[key]; const id = `conc-${key}-${uid++}`;
+  return `<label class="conc" for="${id}">농도 <input id="${id}" data-k="${key}" type="number" inputmode="decimal" step="any" min="0.01" value="${getConc(key)}"> ${d.cu}</label>`;
+}
+function drugBlock(rec, W, rank){
+  const d = DRUGS[rec.key];
+  const tag = rank === 1 ? '<span class="rank">1차</span>' : '<span class="rank two">2차</span>';
+  return `<div class="drug${rank===1?'':' altcard'}"><div class="drug-top"><h4>${tag}${d.name}</h4>${concInput(rec.key)}</div>
+    ${rec.when ? `<div class="when"><b>언제:</b> ${rec.when}</div>` : ''}
+    <ul class="why">${rec.why.map(w=>`<li>${w}</li>`).join('')}</ul>
+    ${doseTable(rec, W)}
+    ${rec.notes && rec.notes.length ? `<ul class="notes">${rec.notes.map(n=>`<li>${n}</li>`).join('')}</ul>` : ''}</div>`;
+}
+function alts(arr, W){
+  if (!arr.length) return '';
+  return `<span class="flabel">2차 선택 · 병용 (${arr.length})</span><div class="alts">${arr.map(a=>drugBlock(a, W, 2)).join('')}</div>`;
+}
+
+const out = document.getElementById('out');
+function render(){
+  uid = 0;
+  const s = readState();
+  const w = weights(s);
+  document.getElementById('wt').innerHTML = `IBW <b>${fmt(w.ibw)}</b> kg · BMI <b>${fmt(w.bmi)}</b> · 투약 체중 <b>${fmt(w.W)} kg</b> — ${w.how}`;
+  const W = w.W;
+  const r = plan(s, W);
+  const sedName = r.sed && r.sed.key ? DRUGS[r.sed.key].name : '지속주입 보류';
+  const pills = [
+    `<span class="pill acc">${s.target==='light' ? 'RASS 0 ~ −2' : 'RASS −3 ~ −5'}</span>`,
+    `<span class="pill">CPOT ≤ 2 · BPS ≤ 5</span>`,
+    `<span class="pill">투약 체중 ${fmt(W)} kg</span>`,
+  ].join('');
+  let sedBody;
+  if (r.sed && r.sed.key) sedBody = drugBlock(r.sed, W, 1);
+  else sedBody = `<div class="drug"><div class="drug-top"><h4><span class="rank">1차</span>진정제 지속주입 보류</h4></div><ul class="why">${r.sed.why.map(x=>`<li>${x}</li>`).join('')}</ul>
+     <div class="tablewrap"><table class="dose"><tbody><tr><th>Rescue</th><td class="txt">${r.sed.bolus}</td></tr></tbody></table></div>
+     <ul class="notes">${r.sed.notes.map(n=>`<li>${n}</li>`).join('')}</ul></div>`;
+  out.innerHTML = `<div class="rx">
+    <div class="rx-head">
+      <div><span class="eyebrow">1차 진통</span><span class="drugname">${DRUGS[r.analg.key].name}</span></div>
+      <div><span class="eyebrow">1차 진정</span><span class="drugname">${sedName}</span></div>
+    </div>
+    <div class="target">${pills}</div>
+    <div class="block"><h3>진통제</h3>${drugBlock(r.analg, W, 1)}${alts(r.analgAlt, W)}</div>
+    <div class="block"><h3>진정제</h3>${sedBody}${alts(r.sedAlt, W)}</div>
+    <div class="block"><h3>보조 진통제 (opioid 절감)</h3><ul class="adj">${r.adj.map(a=>`<li>
+        <div class="ah"><b>${a.name}</b><span class="mech">${a.mech}</span></div>
+        <div class="d">${a.dose}</div><div class="r">${a.reason}</div>${a.caution?`<div class="c">주의: ${a.caution}</div>`:''}</li>`).join('')}</ul></div>
+    <div class="block"><h3>피할 약</h3><ul class="avoid">${r.avoid.map(([n,why])=>`<li><b>${n}</b>${why}</li>`).join('')}</ul></div>
+    <div class="block"><h3>모니터링</h3><ul class="mon">${r.mon.map(([k,v])=>`<li><span>${k}</span><span>${v}</span></li>`).join('')}</ul></div>
+  </div>`;
+}
+
+inputs.addEventListener('input', render);
+inputs.addEventListener('change', render);
+out.addEventListener('change', e=>{
+  const k = e.target && e.target.dataset && e.target.dataset.k;
+  if (!k) return;
+  const v = parseFloat(e.target.value);
+  if (v > 0) conc[k] = v; else delete conc[k];
+  try { localStorage.setItem(STORE, JSON.stringify(conc)); } catch(err) {}
+  const id = e.target.id;
+  render();
+  const el = document.getElementById(id); if (el) el.focus();
+});
+render();
+})();
+</script>
+
+</body>
+</html>
